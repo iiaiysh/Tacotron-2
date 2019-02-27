@@ -176,24 +176,7 @@ def train(log_dir, args, hparams):
 	time_window = ValueWindow(100)
 	loss_window = ValueWindow(100)
 
-	from tensorflow.python.ops import variables
-	x = variables._all_saveable_objects()
-	#varids = [ i for i in x if i.op.name != 'Tacotron_model/inference/inputs_embedding']
-	varids = [ i  for i in x if 'inputs_embedding' not in i.op.name ]
-	import pprint
-	pprint.pprint(varids)
-
-
-	saver = tf.train.Saver(var_list=varids, max_to_keep=None)
-	# model.add_optimizer(global_step)
-	# stats = add_train_stats(model, hparams)
-
-	#saver = tf.train.Saver(var_list=x, max_to_keep=None)
-
-
-	old_embedding_table = tf.get_variable(
-		'old_inputs_embedding', [len(old_symbols), hparams.embedding_dim], dtype=tf.float32)
-	embedding_saver = tf.train.Saver(var_list={'Tacotron_model/inference/inputs_embedding':old_embedding_table},max_to_keep=None)
+	saver = tf.train.Saver(max_to_keep=None)
 
 	log('Tacotron training set to a maximum of {} steps'.format(args.tacotron_train_steps))
 
@@ -208,8 +191,6 @@ def train(log_dir, args, hparams):
 			summary_writer = tf.summary.FileWriter(tensorboard_dir, sess.graph)
 
 			sess.run(tf.global_variables_initializer())
-			# print(sess.run(global_step))
-			# print(sess.run(model.learning_rate))
 
 			#saved model restoring
 			if args.restore:
@@ -220,9 +201,6 @@ def train(log_dir, args, hparams):
 					if (checkpoint_state and checkpoint_state.model_checkpoint_path):
 						log('Loading checkpoint {}'.format(checkpoint_state.model_checkpoint_path), slack=True)
 						saver.restore(sess, checkpoint_state.model_checkpoint_path)
-						embedding_saver.restore(sess, checkpoint_state.model_checkpoint_path)
-						sess.run(tf.scatter_update(model.embedding_table, list(range(0,len(old_symbols))), old_embedding_table))
-
 
 					else:
 						log('No model to load at {}'.format(save_dir), slack=True)
