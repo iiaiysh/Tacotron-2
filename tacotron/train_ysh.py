@@ -11,17 +11,18 @@ import tensorflow as tf
 from datasets import audio
 from hparams import hparams_debug_string
 from tacotron.feeder import Feeder
-from tacotron.models import create_model
+from tacotron.models import create_model_ysh
 from tacotron.utils import ValueWindow, plot
 from tacotron.utils.text import sequence_to_text
 from tacotron.utils.symbols import symbols
+from tacotron.utils.symbols import old_symbols
 from tqdm import tqdm
 
 log = infolog.log
 
 
 def time_string():
-	return datetime.now().strftime('%Y-%m-%d %H:%M')
+	return datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
 
 def add_embedding_stats(summary_writer, embedding_names, paths_to_meta, checkpoint_path):
 	#Create tensorboard projector
@@ -63,12 +64,13 @@ def add_train_stats(model, hparams):
 		tf.summary.scalar('max_gradient_norm', tf.reduce_max(gradient_norms)) #visualize gradients (in case of explosion)
 		return tf.summary.merge_all()
 
-def add_eval_stats(summary_writer, step, linear_loss, before_loss, after_loss, stop_token_loss, loss):
+def add_eval_stats(summary_writer, step, linear_loss, before_loss, after_loss, stop_token_loss, loss, reg_loss):
 	values = [
 	tf.Summary.Value(tag='Tacotron_eval_model/eval_stats/eval_before_loss', simple_value=before_loss),
 	tf.Summary.Value(tag='Tacotron_eval_model/eval_stats/eval_after_loss', simple_value=after_loss),
 	tf.Summary.Value(tag='Tacotron_eval_model/eval_stats/stop_token_loss', simple_value=stop_token_loss),
 	tf.Summary.Value(tag='Tacotron_eval_model/eval_stats/eval_loss', simple_value=loss),
+	tf.Summary.Value(tag='Tacotron_eval_model/eval_stats/regularization_loss', simple_value=reg_loss),
 	]
 	if linear_loss is not None:
 		values.append(tf.Summary.Value(tag='Tacotron_eval_model/eval_stats/eval_linear_loss', simple_value=linear_loss))
@@ -80,7 +82,7 @@ def model_train_mode(args, feeder, hparams, global_step):
 		model_name = None
 		if args.model == 'Tacotron-2':
 			model_name = 'Tacotron'
-		model = create_model(model_name or args.model, hparams)
+		model = create_model_ysh(model_name or args.model, hparams)
 		if hparams.predict_linear:
 			model.initialize(feeder.inputs, feeder.input_lengths, feeder.mel_targets, feeder.token_targets, linear_targets=feeder.linear_targets,
 				targets_lengths=feeder.targets_lengths, global_step=global_step,
@@ -99,7 +101,7 @@ def model_test_mode(args, feeder, hparams, global_step):
 		model_name = None
 		if args.model == 'Tacotron-2':
 			model_name = 'Tacotron'
-		model = create_model(model_name or args.model, hparams)
+		model = create_model_ysh(model_name or args.model, hparams)
 		if hparams.predict_linear:
 			model.initialize(feeder.eval_inputs, feeder.eval_input_lengths, feeder.eval_mel_targets, feeder.eval_token_targets,
 				linear_targets=feeder.eval_linear_targets, targets_lengths=feeder.eval_targets_lengths, global_step=global_step,
@@ -119,7 +121,7 @@ def train(log_dir, args, hparams):
 	eval_dir = os.path.join(log_dir, 'eval-dir')
 	eval_plot_dir = os.path.join(eval_dir, 'plots')
 	eval_wav_dir = os.path.join(eval_dir, 'wavs')
-	tensorboard_dir = os.path.join(log_dir, 'tacotron_events')
+	tensorboard_dir = os.path.join(log_dir, 'tacotron_events', time_string())
 	meta_folder = os.path.join(log_dir, 'metas')
 	os.makedirs(save_dir, exist_ok=True)
 	os.makedirs(plot_dir, exist_ok=True)
@@ -173,7 +175,25 @@ def train(log_dir, args, hparams):
 	step = 0
 	time_window = ValueWindow(100)
 	loss_window = ValueWindow(100)
-	saver = tf.train.Saver(max_to_keep=20)
+
+	from tensorflow.python.ops import variables
+	x = variables._all_saveable_objects()
+	#varids = [ i for i in x if i.op.name != 'Tacotron_model/inference/inputs_embedding']
+	varids = [ i  for i in x if 'inputs_embedding' not in i.op.name ]
+	import pprint
+	pprint.pprint(varids)
+
+
+	saver = tf.train.Saver(var_list=varids, max_to_keep=None)
+	# model.add_optimizer(global_step)
+	# stats = add_train_stats(model, hparams)
+
+	#saver = tf.train.Saver(var_list=x, max_to_keep=None)
+
+
+	old_embedding_table = tf.get_variable(
+		'old_inputs_embedding', [len(old_symbols), hparams.embedding_dim], dtype=tf.float32)
+	embedding_saver = tf.train.Saver(var_list={'Tacotron_model/inference/inputs_embedding':old_embedding_table},max_to_keep=None)
 
 	log('Tacotron training set to a maximum of {} steps'.format(args.tacotron_train_steps))
 
@@ -188,6 +208,8 @@ def train(log_dir, args, hparams):
 			summary_writer = tf.summary.FileWriter(tensorboard_dir, sess.graph)
 
 			sess.run(tf.global_variables_initializer())
+			# print(sess.run(global_step))
+			# print(sess.run(model.learning_rate))
 
 			#saved model restoring
 			if args.restore:
@@ -198,6 +220,9 @@ def train(log_dir, args, hparams):
 					if (checkpoint_state and checkpoint_state.model_checkpoint_path):
 						log('Loading checkpoint {}'.format(checkpoint_state.model_checkpoint_path), slack=True)
 						saver.restore(sess, checkpoint_state.model_checkpoint_path)
+						embedding_saver.restore(sess, checkpoint_state.model_checkpoint_path)
+						sess.run(tf.scatter_update(model.embedding_table, list(range(0,len(old_symbols))), old_embedding_table))
+
 
 					else:
 						log('No model to load at {}'.format(save_dir), slack=True)
@@ -209,24 +234,32 @@ def train(log_dir, args, hparams):
 				log('Starting new training!', slack=True)
 				saver.save(sess, checkpoint_path, global_step=global_step)
 
+
+
+			print(model.embedding_table.shape)
+
 			#initializing feeder
 			feeder.start_threads(sess)
 
 			#Training loop
 			while not coord.should_stop() and step < args.tacotron_train_steps:
 				start_time = time.time()
-				step, loss, opt = sess.run([global_step, model.loss, model.optimize])
+				step, loss, opt, lr = sess.run([global_step, model.loss, model.optimize, model.learning_rate])
+
+				init_step = step-1
+				# print(f'start global step {init_step}')
+
 				time_window.append(time.time() - start_time)
 				loss_window.append(loss)
-				message = 'Step {:7d} [{:.3f} sec/step, loss={:.5f}, avg_loss={:.5f}]'.format(
-					step, time_window.average, loss, loss_window.average)
+				message = 'Step {:7d} [{:.3f} sec/step, loss={:.5f}, avg_loss={:.5f}, lr={:.10f}]'.format(
+					step, time_window.average, loss, loss_window.average, lr)
 				log(message, end='\r', slack=(step % args.checkpoint_interval == 0))
 
 				if np.isnan(loss) or loss > 100.:
 					log('Loss exploded to {:.5f} at step {}'.format(loss, step))
 					raise Exception('Loss exploded')
 
-				if step % args.summary_interval == 0:
+				if step % args.summary_interval == 0 :
 					log('\nWriting summary at step {}'.format(step))
 					summary_writer.add_summary(sess.run(stats), step)
 
@@ -240,21 +273,23 @@ def train(log_dir, args, hparams):
 					stop_token_losses = []
 					linear_losses = []
 					linear_loss = None
+					reg_losses = []
 
 					if hparams.predict_linear:
 						for i in tqdm(range(feeder.test_steps)):
-							eloss, before_loss, after_loss, stop_token_loss, linear_loss, mel_p, mel_t, t_len, align, lin_p, lin_t = sess.run([
+							eloss, before_loss, after_loss, stop_token_loss, linear_loss, mel_p, mel_t, t_len, align, lin_p, lin_t, reg_loss = sess.run([
 								eval_model.tower_loss[0], eval_model.tower_before_loss[0], eval_model.tower_after_loss[0],
 								eval_model.tower_stop_token_loss[0], eval_model.tower_linear_loss[0], eval_model.tower_mel_outputs[0][0],
 								eval_model.tower_mel_targets[0][0], eval_model.tower_targets_lengths[0][0],
 								eval_model.tower_alignments[0][0], eval_model.tower_linear_outputs[0][0],
-								eval_model.tower_linear_targets[0][0],
+								eval_model.tower_linear_targets[0][0],eval_model.tower_regularization_loss[0],
 								])
 							eval_losses.append(eloss)
 							before_losses.append(before_loss)
 							after_losses.append(after_loss)
 							stop_token_losses.append(stop_token_loss)
 							linear_losses.append(linear_loss)
+							reg_losses.append(reg_loss)
 						linear_loss = sum(linear_losses) / len(linear_losses)
 
 						wav = audio.inv_linear_spectrogram(lin_p.T, hparams)
@@ -262,20 +297,22 @@ def train(log_dir, args, hparams):
 
 					else:
 						for i in tqdm(range(feeder.test_steps)):
-							eloss, before_loss, after_loss, stop_token_loss, mel_p, mel_t, t_len, align = sess.run([
+							eloss, before_loss, after_loss, stop_token_loss, mel_p, mel_t, t_len, align, reg_loss = sess.run([
 								eval_model.tower_loss[0], eval_model.tower_before_loss[0], eval_model.tower_after_loss[0],
 								eval_model.tower_stop_token_loss[0], eval_model.tower_mel_outputs[0][0], eval_model.tower_mel_targets[0][0],
-								eval_model.tower_targets_lengths[0][0], eval_model.tower_alignments[0][0]
+								eval_model.tower_targets_lengths[0][0], eval_model.tower_alignments[0][0],eval_model.tower_regularization_loss[0],
 								])
 							eval_losses.append(eloss)
 							before_losses.append(before_loss)
 							after_losses.append(after_loss)
 							stop_token_losses.append(stop_token_loss)
+							reg_losses.append(reg_loss)
 
 					eval_loss = sum(eval_losses) / len(eval_losses)
 					before_loss = sum(before_losses) / len(before_losses)
 					after_loss = sum(after_losses) / len(after_losses)
 					stop_token_loss = sum(stop_token_losses) / len(stop_token_losses)
+					reg_loss = sum(reg_losses) / len(reg_losses)
 
 					log('Saving eval log to {}..'.format(eval_dir))
 					#Save some log to monitor model improvement on same unseen sequence
@@ -296,7 +333,7 @@ def train(log_dir, args, hparams):
 
 					log('Eval loss for global step {}: {:.3f}'.format(step, eval_loss))
 					log('Writing eval summary!')
-					add_eval_stats(summary_writer, step, linear_loss, before_loss, after_loss, stop_token_loss, eval_loss)
+					add_eval_stats(summary_writer, step, linear_loss, before_loss, after_loss, stop_token_loss, eval_loss, reg_loss)
 
 
 				if step % args.checkpoint_interval == 0 or step == args.tacotron_train_steps or step == 300:

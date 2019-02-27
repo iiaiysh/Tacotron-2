@@ -12,7 +12,7 @@ from wavenet_vocoder.train import wavenet_train
 
 log = infolog.log
 
-from hparams_ysh import hparams_ysh
+from hparams_ysh import hparams_ysh, update_hp1_with_hp2
 
 def save_seq(file, sequence, input_path):
 	'''Save Tacotron-2 training state to disk. (To skip for future runs)
@@ -32,21 +32,11 @@ def read_seq(file):
 	else:
 		return [0, 0, 0], ''
 
-def update_hp1_with_hp2(hp1, hp2):
-	keys1 = hp1.values().keys()
-	keys2 = hp2.values().keys()
 
-	for key in keys2:
-		if key in keys1:
-			hp1.set_hparam(key, hp2.get(key))
-		else:
-			hp1.add_hparam(key, hp2.get(key))
-
-	return hp1
 
 def prepare_run(args):
 	modified_hp = hparams.parse(args.hparams)
-	modified_hp = update_hp1_with_hp2(modified_hp, hparams_ysh)
+	update_hp1_with_hp2(modified_hp, hparams_ysh)
 
 	os.environ['TF_CPP_MIN_LOG_LEVEL'] = str(args.tf_log_level)
 	run_name = '_'.join([args.model,args.name])

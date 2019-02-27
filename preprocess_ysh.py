@@ -3,10 +3,11 @@ import os
 from multiprocessing import cpu_count
 
 from datasets import preprocessor
-from datasets import preprocessor_blizzard
-from hparams import hparams
+from datasets import preprocessor_blizzard, preprocessor_ysh
+from hparams import hparams ,hparams_debug_string
 from tqdm import tqdm
-
+from hparams_ysh import hparams_ysh, update_hp1_with_hp2
+import pickle
 
 def preprocess(args, input_folders, out_dir, hparams):
 	mel_dir = os.path.join(out_dir, 'mels')
@@ -15,7 +16,9 @@ def preprocess(args, input_folders, out_dir, hparams):
 	os.makedirs(mel_dir, exist_ok=True)
 	os.makedirs(wav_dir, exist_ok=True)
 	os.makedirs(linear_dir, exist_ok=True)
-	metadata = preprocessor.build_from_path(hparams, input_folders, mel_dir, linear_dir, wav_dir, args.n_jobs, tqdm=tqdm)
+	metadata = preprocessor_ysh.build_from_path(hparams, input_folders, mel_dir, linear_dir, wav_dir, args.n_jobs, tqdm=tqdm)
+	# with open('mel_frames.file','wb') as f:
+	# 	pickle.dump(metadata, f)
 	write_metadata(metadata, out_dir)
 
 def preprocess_blizzard(args, input_folders, out_dir, hparams):
@@ -26,6 +29,7 @@ def preprocess_blizzard(args, input_folders, out_dir, hparams):
 	os.makedirs(wav_dir, exist_ok=True)
 	os.makedirs(linear_dir, exist_ok=True)
 	metadata = preprocessor_blizzard.build_from_path(hparams, input_folders, mel_dir, linear_dir, wav_dir, args.n_jobs, tqdm=tqdm)
+
 
 	write_metadata(metadata, out_dir)
 
@@ -121,6 +125,10 @@ def main():
 	args = parser.parse_args()
 
 	modified_hp = hparams.parse(args.hparams)
+
+	update_hp1_with_hp2(modified_hp, hparams_ysh)
+
+	hparams_debug_string()
 
 	assert args.merge_books in ('False', 'True')
 
