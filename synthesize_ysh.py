@@ -15,6 +15,7 @@ from hparams_ysh import hparams_ysh, update_hp1_with_hp2
 def prepare_run(args):
 	modified_hp = hparams.parse(args.hparams)
 	update_hp1_with_hp2(modified_hp, hparams_ysh)
+	modified_hp.set_hparam('tacotron_num_gpus', 1)
 
 	os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
