@@ -184,11 +184,11 @@ def train(log_dir, args, hparams):
 	pprint.pprint(varids)
 
 
-	saver = tf.train.Saver(var_list=varids, max_to_keep=None)
+	loader = tf.train.Saver(var_list=varids, max_to_keep=None)
 	# model.add_optimizer(global_step)
 	# stats = add_train_stats(model, hparams)
 
-	#saver = tf.train.Saver(var_list=x, max_to_keep=None)
+	saver = tf.train.Saver(max_to_keep=None)
 
 
 	old_embedding_table = tf.get_variable(
@@ -219,7 +219,7 @@ def train(log_dir, args, hparams):
 
 					if (checkpoint_state and checkpoint_state.model_checkpoint_path):
 						log('Loading checkpoint {}'.format(checkpoint_state.model_checkpoint_path), slack=True)
-						saver.restore(sess, checkpoint_state.model_checkpoint_path)
+						loader.restore(sess, checkpoint_state.model_checkpoint_path)
 						embedding_saver.restore(sess, checkpoint_state.model_checkpoint_path)
 						sess.run(tf.scatter_update(model.embedding_table, list(range(0,len(old_symbols))), old_embedding_table))
 
