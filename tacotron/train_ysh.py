@@ -196,15 +196,21 @@ def train(log_dir, args, hparams):
 			if args.restore:
 				# Restore saved model if the user requested it, default = True
 				try:
-					checkpoint_state = tf.train.get_checkpoint_state(save_dir)
 
-					if (checkpoint_state and checkpoint_state.model_checkpoint_path):
-						log('Loading checkpoint {}'.format(checkpoint_state.model_checkpoint_path), slack=True)
-						saver.restore(sess, checkpoint_state.model_checkpoint_path)
+					if args.checkpoint is not None:
+						log('Loading checkpoint {}'.format(args.checkpoint), slack=True)
+						saver.restore(sess, args.checkpoint)
 
 					else:
-						log('No model to load at {}'.format(save_dir), slack=True)
-						saver.save(sess, checkpoint_path, global_step=global_step)
+						checkpoint_state = tf.train.get_checkpoint_state(save_dir)
+
+						if (checkpoint_state and checkpoint_state.model_checkpoint_path):
+							log('Loading checkpoint {}'.format(checkpoint_state.model_checkpoint_path), slack=True)
+							saver.restore(sess, checkpoint_state.model_checkpoint_path)
+
+						else:
+							log('No model to load at {}'.format(save_dir), slack=True)
+							saver.save(sess, checkpoint_path, global_step=global_step)
 
 				except tf.errors.OutOfRangeError as e:
 					log('Cannot restore checkpoint: {}'.format(e), slack=True)
@@ -212,7 +218,8 @@ def train(log_dir, args, hparams):
 				log('Starting new training!', slack=True)
 				saver.save(sess, checkpoint_path, global_step=global_step)
 
-
+			if hparams.find_lr:
+				sess.run(tf.assign(global_step, 0))
 
 			print(model.embedding_table.shape)
 
@@ -224,14 +231,17 @@ def train(log_dir, args, hparams):
 				start_time = time.time()
 				step, loss, opt, lr = sess.run([global_step, model.loss, model.optimize, model.learning_rate])
 
-				init_step = step-1
-				# print(f'start global step {init_step}')
 
 				time_window.append(time.time() - start_time)
 				loss_window.append(loss)
 				message = 'Step {:7d} [{:.3f} sec/step, loss={:.5f}, avg_loss={:.5f}, lr={:.10f}]'.format(
 					step, time_window.average, loss, loss_window.average, lr)
 				log(message, end='\r', slack=(step % args.checkpoint_interval == 0))
+
+				if hparams.find_lr:
+					log('\nWriting summary at step {}'.format(step))
+					summary_writer.add_summary(sess.run(stats), step)
+					continue
 
 				if np.isnan(loss) or loss > 100.:
 					log('Loss exploded to {:.5f} at step {}'.format(loss, step))

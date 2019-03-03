@@ -100,6 +100,7 @@ def main():
 	parser.add_argument('--model', default='Tacotron', required=True)
 	parser.add_argument('--tacotron_input', default='training_data/train.txt', required=True)
 	parser.add_argument('--name', help='Name of logging directory.', required=True)
+	parser.add_argument('--checkpoint', help='explict assign the checkpoint path', default=None)
 
 
 
