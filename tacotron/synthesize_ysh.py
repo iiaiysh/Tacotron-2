@@ -7,7 +7,9 @@ from time import sleep
 import tensorflow as tf
 from hparams import hparams, hparams_debug_string
 from infolog import log
+from tacotron.synthesizer_ysh_split_init_load import Synthesizer_Split
 from tacotron.synthesizer_ysh import Synthesizer
+
 from tqdm import tqdm
 
 
@@ -74,6 +76,76 @@ def run_eval(args, checkpoint_path, output_dir, hparams, sentences):
 	log('synthesized mel spectrograms at {}'.format(eval_dir))
 	return eval_dir
 
+def run_eval_folder(args, checkpoint_path, output_dir, hparams, sentences):
+	eval_dir = os.path.join(output_dir, 'eval')
+	log_dir = os.path.join(output_dir, 'logs-eval')
+
+	if args.model == 'Tacotron-2':
+		assert os.path.normpath(eval_dir) == os.path.normpath(args.mels_dir)
+
+	#Create output path if it doesn't exist
+	os.makedirs(eval_dir, exist_ok=True)
+	os.makedirs(log_dir, exist_ok=True)
+	os.makedirs(os.path.join(log_dir, 'wavs'), exist_ok=True)
+	os.makedirs(os.path.join(log_dir, 'plots'), exist_ok=True)
+
+	log(hparams_debug_string())
+
+
+	ckpt_list = os.listdir(checkpoint_path)
+	ckpt_list = [ckpt[:-5] for ckpt in ckpt_list if ckpt.endswith('.meta')]
+	print(f'total {len(ckpt_list)} ckpts to synthesize in {checkpoint_path}')
+
+	wav_dir = os.path.join(log_dir, 'wavs')
+	wav_count_dict = {}
+	if os.path.exists(wav_dir):
+		wav_list = os.listdir(wav_dir)
+		wav_list = [wav.split('batch')[0] for wav in wav_list if wav.endswith('.wav')]
+
+		wav_set = set(wav_list)
+		wav_count_dict_list = [{wav: wav_list.count(wav)} for wav in wav_set]
+		[wav_count_dict.update(_) for _ in wav_count_dict_list]
+
+
+	#Set inputs batch wise
+	sentences = [sentences[i: i+hparams.tacotron_synthesis_batch_size] for i in range(0, len(sentences), hparams.tacotron_synthesis_batch_size)]
+
+	synth = Synthesizer_Split(hparams)
+
+	for i, ckpt in enumerate(ckpt_list):
+		m = re.match('tacotron_model.ckpt-(\d+)', ckpt)
+		ckpt_step = m.group(1)
+
+		if f'wav-step_{ckpt_step}_' in wav_count_dict.keys():
+			if wav_count_dict[f'wav-step_{ckpt_step}_'] == len(sentences) * 2:
+				do_synthesize = False
+			else:
+				do_synthesize = True
+		else:
+			do_synthesize = True
+
+		if do_synthesize:
+			synth.load(os.path.join(checkpoint_path, ckpt))
+
+			log(f'[{i+1}/{len(ckpt_list)}] Starting Synthesis ')
+			with open(os.path.join(eval_dir, 'map.txt'), 'w') as file:
+				for i, texts in enumerate(tqdm(sentences)):
+					start = time.time()
+					basenames = ['step_{}_batch_{}_sentence_{}'.format(ckpt_step, i, j) for j in range(len(texts))]
+					mel_filenames, speaker_ids = synth.synthesize(texts, basenames, eval_dir, log_dir, None)
+
+					for elems in zip(texts, mel_filenames, speaker_ids):
+						file.write('|'.join([str(x) for x in elems]) + '\n')
+
+		else:
+			log(f'[{i+1}/{len(ckpt_list)}] ckpt {ckpt} already synthesized in output_{args.name} folder, continue...')
+			continue
+
+
+
+
+	return eval_dir
+
 def run_synthesis(args, checkpoint_path, output_dir, hparams):
 	GTA = (args.GTA == 'True')
 	if GTA:
@@ -137,6 +209,8 @@ def tacotron_synthesize(args, hparams, checkpoint, sentences=None):
 
 	if args.mode == 'eval':
 		return run_eval(args, checkpoint_path, output_dir, hparams, sentences)
+	elif args.mode == 'eval_folder':
+		return run_eval_folder(args, checkpoint_path, output_dir, hparams, sentences)
 	elif args.mode == 'synthesis':
 		return run_synthesis(args, checkpoint_path, output_dir, hparams)
 	else:
