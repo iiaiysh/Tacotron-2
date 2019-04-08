@@ -27,4 +27,11 @@ f = open('relation_list.file','rb')
 
 relation_list = pickle.load(f)
 
-a=1
+mel = np.load('training_data/blizzard_training_data_maxmel_1700_clip_norescale/mels/mel-TheManThatCorruptedHadleyburg_chp37_00019.npy')
+
+
+mel = np.load('tacotron_output/output_blizzard_pretrain_sym69_6gpu_norescale_ckpt48000_wavenet_train/gta/mel-TheManThatCorruptedHadleyburg_chp37_00019.npy')
+
+mel = np.load('training_data/blizzard_training_data_maxmel_1700_clip_norescale/mels/mel-TheManThatCorruptedHadleyburg_chp37_00019.npy')
+wav = audio.inv_mel_spectrogram(mel.T, hparams)
+audio.save_wav(wav,'gta-37_00019.wav',22050)

@@ -74,7 +74,7 @@ class Synthesizer_Split:
 		self.saver.restore(self.session, checkpoint_path)
 
 	# noted that the input texts should be a list of strings!
-	def synthesize(self, texts, basenames, out_dir, log_dir, mel_filenames, return_wav=False):
+	def synthesize(self, texts, basenames, out_dir, log_dir, mel_filenames, return_wav=False, wav_format='wav'):
 		if type(texts) == str:
 			texts = [texts]
 		assert type(texts) == list
@@ -220,14 +220,14 @@ class Synthesizer_Split:
 					wav = audio.inv_preemphasis(wav, hparams.preemphasis, hparams.preemphasize)
 				else:
 					wav = audio.inv_mel_spectrogram(mel.T, hparams)
-				audio.save_wav(wav, os.path.join(log_dir, 'wavs/wav-{}-mel.wav'.format(basenames[i])), sr=hparams.sample_rate)
+				audio.save_wav(wav, os.path.join(log_dir, 'wavs/wav-{}-mel.{}'.format(basenames[i], wav_format)), sr=hparams.sample_rate)
 
 				#save alignments
-				plot.plot_alignment(alignments[i], os.path.join(log_dir, 'plots/alignment-{}.png'.format(basenames[i])),
+				plot.plot_alignment(alignments[i], os.path.join(log_dir, 'plots-align/alignment-{}.png'.format(basenames[i])),
 					title='{}'.format(texts[i]), split_title=True, max_len=target_lengths[i])
 
 				#save mel spectrogram plot
-				plot.plot_spectrogram(mel, os.path.join(log_dir, 'plots/mel-{}.png'.format(basenames[i])),
+				plot.plot_spectrogram(mel, os.path.join(log_dir, 'plots-mel/mel-{}.png'.format(basenames[i])),
 					title='{}'.format(texts[i]), split_title=True)
 
 				if hparams.predict_linear:
@@ -237,10 +237,10 @@ class Synthesizer_Split:
 						wav = audio.inv_preemphasis(wav, hparams.preemphasis, hparams.preemphasize)
 					else:
 						wav = audio.inv_linear_spectrogram(linears[i].T, hparams)
-					audio.save_wav(wav, os.path.join(log_dir, 'wavs/wav-{}-linear.wav'.format(basenames[i])), sr=hparams.sample_rate)
+					audio.save_wav(wav, os.path.join(log_dir, 'wavs/wav-{}-linear.{}'.format(basenames[i], wav_format)), sr=hparams.sample_rate)
 
 					#save linear spectrogram plot
-					plot.plot_spectrogram(linears[i], os.path.join(log_dir, 'plots/linear-{}.png'.format(basenames[i])),
+					plot.plot_spectrogram(linears[i], os.path.join(log_dir, 'plots-linear/linear-{}.png'.format(basenames[i])),
 						title='{}'.format(texts[i]), split_title=True, auto_aspect=True)
 
 		return saved_mels_paths, speaker_ids

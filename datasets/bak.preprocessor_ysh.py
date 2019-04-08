@@ -5,26 +5,18 @@ from functools import partial
 import numpy as np
 from datasets import audio
 from wavenet_vocoder.util import is_mulaw, is_mulaw_quantize, mulaw, mulaw_quantize
-from hparams_ysh import hparams_ysh
 
 import wave
 import contextlib
 
 import shutil
-books = [
-  'ATrampAbroad',
-  'TheManThatCorruptedHadleyburg',
-  # 'LifeOnTheMississippi',
-  # 'TheAdventuresOfTomSawyer',
-]
-_min_confidence = 90
-
 def read_duration(fname):
         with contextlib.closing(wave.open(fname,'r')) as f:
                 frames = f.getnframes()
                 rate = f.getframerate()
                 duration = frames / float(rate)
         return duration
+
 
 def build_from_path(hparams, input_dirs, mel_dir, linear_dir, wav_dir, n_jobs=12, tqdm=lambda x: x):
 	"""
@@ -48,20 +40,18 @@ def build_from_path(hparams, input_dirs, mel_dir, linear_dir, wav_dir, n_jobs=12
 	executor = ProcessPoolExecutor(max_workers=n_jobs)
 	futures = []
 	index = 1
-	print(input_dirs)
-	for book in books:
-		for input_dir in input_dirs:
-			with open(os.path.join(input_dir, book, 'sentence_index.txt'), encoding='utf-8') as f:
-				for line in f:
-					parts = line.strip().split('\t')
-					if line[0] is not '#' and len(parts) == 8 and float(parts[3]) > _min_confidence:
-						wav_path = os.path.join(input_dir, book, 'wav', '%s.wav' % parts[0])
-						basename = '_'.join([book, parts[0]])
-						text = parts[5]
-						# if parts[0] == 'chp37_00019':
-						futures.append(executor.submit(partial(_process_utterance, mel_dir, linear_dir, wav_dir, basename, wav_path, text, hparams)))
-						index += 1
-
+	for input_dir in input_dirs:
+		with open(os.path.join(input_dir, 'metadata.csv'), encoding='utf-8') as f:
+			for line in f:
+				try:
+					parts = line.strip().split('|')
+					basename = parts[0]
+					wav_path = os.path.join(input_dir, 'wavs', '{}.wav'.format(basename))
+					text = parts[2]
+					futures.append(executor.submit(partial(_process_utterance, mel_dir, linear_dir, wav_dir, basename, wav_path, text, hparams)))
+					index += 1
+				except:
+					print(line)
 
 	return [future.result() for future in tqdm(futures) if future.result() is not None]
 
@@ -95,11 +85,14 @@ def _process_utterance(mel_dir, linear_dir, wav_dir, index, wav_path, text, hpar
 		print('file {} present in csv metadata is not present in wav folder. skipping!'.format(
 			wav_path))
 		return None
-
+	assert wav.shape != (0,)
 
 	#Trim lead/trail silences
-	if hparams.trim_silence:
-		wav = audio.trim_silence(wav, hparams)
+	try:
+		if hparams.trim_silence:
+			wav = audio.trim_silence(wav, hparams)
+	except:
+		print(wav_path)
 
 	#Pre-emphasize
 	preem_wav = audio.preemphasis(wav, hparams.preemphasis, hparams.preemphasize)
@@ -144,8 +137,8 @@ def _process_utterance(mel_dir, linear_dir, wav_dir, index, wav_path, text, hpar
 	# Compute the mel scale spectrogram from the wav
 	mel_spectrogram = audio.melspectrogram(preem_wav, hparams).astype(np.float32)
 	mel_frames = mel_spectrogram.shape[1]
-
-	if mel_frames > hparams_ysh.max_mel_frames and hparams.clip_mels_length:
+	# return mel_frames
+	if mel_frames > hparams.max_mel_frames and hparams.clip_mels_length:
 		return None
 
 	#Compute the linear scale spectrogram from the wav
@@ -178,6 +171,18 @@ def _process_utterance(mel_dir, linear_dir, wav_dir, index, wav_path, text, hpar
 	assert len(out) % audio.get_hop_size(hparams) == 0
 	time_steps = len(out)
 
+	#####################experiment######################
+	if hparams.experiment_preprocess:
+		os.makedirs(os.path.join(wav_dir, '../wavs'), exist_ok=True)
+
+	# mel_spectrogram = audio.melspectrogram(out, hparams).astype(np.float32)
+	#
+	#
+	# linear_spectrogram = audio.linearspectrogram(out, hparams).astype(np.float32)
+
+
+	################################################
+
 	# Write the spectrogram and audio to disk
 	audio_filename = 'audio-{}.npy'.format(index)
 	mel_filename = 'mel-{}.npy'.format(index)
@@ -187,22 +192,20 @@ def _process_utterance(mel_dir, linear_dir, wav_dir, index, wav_path, text, hpar
 	np.save(os.path.join(linear_dir, linear_filename), linear_spectrogram.T, allow_pickle=False)
 
 	if hparams.experiment_preprocess:
-		os.makedirs(os.path.join(wav_dir, '../wavs'), exist_ok=True)
 		shutil.copy(wav_path, os.path.join(wav_dir, '../wavs', os.path.basename(wav_path)))
 		audio_filename = '{}-audio.wav'.format(index)
-		raw_filename = '{}-raw.wav'.format(index)
-		preem_wav_name = '{}-preem.wav'.format(index)
 		mel_filename = '{}-mel.wav'.format(index)
 		linear_filename = '{}-linear.wav'.format(index)
 		audio.save_wav(out.astype(out_dtype),os.path.join(wav_dir, '../wavs', audio_filename),hparams.sample_rate)
-		audio.save_wav(wav.astype(out_dtype),os.path.join(wav_dir, '../wavs', raw_filename),hparams.sample_rate)
-		audio.save_wav(preem_wav.astype(out_dtype),os.path.join(wav_dir, '../wavs', preem_wav_name),hparams.sample_rate)
 
 		mel_wav = audio.inv_mel_spectrogram(mel_spectrogram,hparams)
-		audio.save_wav(mel_wav.astype(out_dtype),os.path.join(mel_dir, '../wavs', mel_filename),hparams.sample_rate)
+		# mel_wav = audio.inv_preemphasis(mel_wav,hparams.preemphasis)
+		audio.save_wav(mel_wav,os.path.join(mel_dir, '../wavs', mel_filename),hparams.sample_rate)
 
 		linear_wav = audio.inv_linear_spectrogram(linear_spectrogram, hparams)
-		audio.save_wav(linear_wav.astype(out_dtype), os.path.join(linear_dir, '../wavs', linear_filename), hparams.sample_rate)
+		# linear_wav = audio.inv_preemphasis(linear_wav,hparams.preemphasis)
+		audio.save_wav(linear_wav, os.path.join(linear_dir, '../wavs', linear_filename), hparams.sample_rate)
+
 
 	# Return a tuple describing this training example
 	return (audio_filename, mel_filename, linear_filename, time_steps, mel_frames, text)

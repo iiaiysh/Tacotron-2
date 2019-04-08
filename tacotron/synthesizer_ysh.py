@@ -12,10 +12,11 @@ from librosa import effects
 from tacotron.models import create_model_ysh
 from tacotron.utils import plot
 from tacotron.utils.text import text_to_sequence
+import platform
 
 #original synthesizer can not synthesize with multiple batch size
 class Synthesizer:
-	def load(self, checkpoint_path, hparams, gta=False, model_name='Tacotron'):
+	def load(self, checkpoint_path, hparams, gta=False, model_name='Tacotron', is_evaluating=False):
 		log('Constructing model: %s' % model_name)
 		#Force the batch size to be known in order to use attention masking in batch synthesis
 		inputs = tf.placeholder(tf.int32, (None, None), name='inputs')
@@ -26,6 +27,8 @@ class Synthesizer:
 			self.model = create_model_ysh(model_name, hparams)
 			if gta:
 				self.model.initialize(inputs, input_lengths, targets, gta=gta, split_infos=split_infos)
+			elif is_evaluating:
+				self.model.initialize(inputs, input_lengths, targets, gta=gta, split_infos=split_infos, is_evaluating=True)
 			else:
 				self.model.initialize(inputs, input_lengths, split_infos=split_infos)
 
@@ -66,6 +69,21 @@ class Synthesizer:
 
 		self.session = tf.Session(config=config)
 		self.session.run(tf.global_variables_initializer())
+
+		# path_lj = '/raid1/stephen/rayhane-tc2-noencoder-demo/ljspeech-logs-Tacotron-2/taco_pretrained/tacotron_model.ckpt-10000'
+		# path_bli = '/raid1/stephen/rayhane-tc2/Tacotron-2/logs-rayhane-Tacotron/taco_pretrained/blizzard_fintune_90k/tacotron_model.ckpt-227000'
+		# path_168 = 'logs-rayhane-Tacotron/taco_pretrained/blizzard_fintune_0217_158k_4_lr_reset_ysh_label/tacotron_model.ckpt-168000'
+		# path_158 = 'logs-rayhane-Tacotron/taco_pretrained/blizzard_fintune_0217_158k_4_lr_reset_ysh_label/tacotron_model.ckpt-158000'
+
+		# encoder_ckpt = path_lj
+		# vars_encoder = [v for v in self.session._graph._collections['variables'] if ('inputs_embedding' in v.name or 'encoder_' in v.name)]
+		# saver = tf.train.Saver(var_list=vars_encoder)
+		# saver.restore(self.session, encoder_ckpt)
+		#
+		# decoder_ckpt = path_158
+		# vars_decoder = [v for v in self.session._graph._collections['variables'] if not ('inputs_embedding' in v.name or 'encoder_' in v.name)]
+		# saver = tf.train.Saver(var_list=vars_decoder)
+		# saver.restore(self.session, decoder_ckpt)
 
 		saver = tf.train.Saver()
 		saver.restore(self.session, checkpoint_path)
@@ -220,11 +238,11 @@ class Synthesizer:
 				audio.save_wav(wav, os.path.join(log_dir, 'wavs/wav-{}-mel.wav'.format(basenames[i])), sr=hparams.sample_rate)
 
 				#save alignments
-				plot.plot_alignment(alignments[i], os.path.join(log_dir, 'plots/alignment-{}.png'.format(basenames[i])),
+				plot.plot_alignment(alignments[i], os.path.join(log_dir, 'plots-align/alignment-{}.png'.format(basenames[i])),
 					title='{}'.format(texts[i]), split_title=True, max_len=target_lengths[i])
 
 				#save mel spectrogram plot
-				plot.plot_spectrogram(mel, os.path.join(log_dir, 'plots/mel-{}.png'.format(basenames[i])),
+				plot.plot_spectrogram(mel, os.path.join(log_dir, 'plots-mel/mel-{}.png'.format(basenames[i])),
 					title='{}'.format(texts[i]), split_title=True)
 
 				if hparams.predict_linear:
@@ -237,7 +255,7 @@ class Synthesizer:
 					audio.save_wav(wav, os.path.join(log_dir, 'wavs/wav-{}-linear.wav'.format(basenames[i])), sr=hparams.sample_rate)
 
 					#save linear spectrogram plot
-					plot.plot_spectrogram(linears[i], os.path.join(log_dir, 'plots/linear-{}.png'.format(basenames[i])),
+					plot.plot_spectrogram(linears[i], os.path.join(log_dir, 'plots-linear/linear-{}.png'.format(basenames[i])),
 						title='{}'.format(texts[i]), split_title=True, auto_aspect=True)
 
 		return saved_mels_paths, speaker_ids

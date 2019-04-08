@@ -1,7 +1,7 @@
 import argparse
 import os
 from multiprocessing import cpu_count
-
+import json
 from datasets import preprocessor
 from datasets import preprocessor_blizzard, preprocessor_ysh
 from hparams import hparams ,hparams_debug_string
@@ -98,6 +98,10 @@ def norm_data(args):
 def run_preprocess(args, hparams):
 	input_folders = norm_data(args)
 	output_folder = os.path.join(args.base_dir, args.output)
+
+	os.makedirs(output_folder, exist_ok=True)
+	with open(os.path.join(output_folder, 'hparams.json'), 'w') as f:
+		json.dump(hparams.values(), f, indent=4, sort_keys=True)
 
 	if args.dataset == 'Blizzard2012':
 		preprocess_blizzard(args, input_folders, output_folder, hparams)

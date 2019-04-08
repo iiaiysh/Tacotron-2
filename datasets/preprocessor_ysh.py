@@ -9,6 +9,7 @@ from wavenet_vocoder.util import is_mulaw, is_mulaw_quantize, mulaw, mulaw_quant
 import wave
 import contextlib
 
+import shutil
 def read_duration(fname):
         with contextlib.closing(wave.open(fname,'r')) as f:
                 frames = f.getnframes()
@@ -42,12 +43,15 @@ def build_from_path(hparams, input_dirs, mel_dir, linear_dir, wav_dir, n_jobs=12
 	for input_dir in input_dirs:
 		with open(os.path.join(input_dir, 'metadata.csv'), encoding='utf-8') as f:
 			for line in f:
-				parts = line.strip().split('|')
-				basename = parts[0]
-				wav_path = os.path.join(input_dir, 'wavs', '{}.wav'.format(basename))
-				text = parts[2]
-				futures.append(executor.submit(partial(_process_utterance, mel_dir, linear_dir, wav_dir, basename, wav_path, text, hparams)))
-				index += 1
+				try:
+					parts = line.strip().split('|')
+					basename = parts[0]
+					wav_path = os.path.join(input_dir, 'wavs', '{}.wav'.format(basename))
+					text = parts[2]
+					futures.append(executor.submit(partial(_process_utterance, mel_dir, linear_dir, wav_dir, basename, wav_path, text, hparams)))
+					index += 1
+				except:
+					print(line)
 
 	return [future.result() for future in tqdm(futures) if future.result() is not None]
 
@@ -167,6 +171,36 @@ def _process_utterance(mel_dir, linear_dir, wav_dir, index, wav_path, text, hpar
 	assert len(out) % audio.get_hop_size(hparams) == 0
 	time_steps = len(out)
 
+	#####################experiment######################
+	if hparams.experiment_preprocess:
+		os.makedirs(os.path.join(wav_dir, '../wavs'), exist_ok=True)
+
+	# mel_spectrogram = audio.melspectrogram(out, hparams).astype(np.float32)
+	#
+	#
+	# linear_spectrogram = audio.linearspectrogram(out, hparams).astype(np.float32)
+
+
+	################################################
+	if hparams.experiment_preprocess:
+		shutil.copy(wav_path, os.path.join(wav_dir, '../wavs', os.path.basename(wav_path)))
+		audio_filename = '{}-audio.wav'.format(index)
+		raw_filename = '{}-raw.wav'.format(index)
+		preem_wav_name = '{}-preem.wav'.format(index)
+		mel_filename = '{}-mel.wav'.format(index)
+		linear_filename = '{}-linear.wav'.format(index)
+		audio.save_wav(out.astype(out_dtype),os.path.join(wav_dir, '../wavs', audio_filename),hparams.sample_rate)
+		audio.save_wav(wav.astype(out_dtype),os.path.join(wav_dir, '../wavs', raw_filename),hparams.sample_rate)
+		audio.save_wav(preem_wav.astype(out_dtype),os.path.join(wav_dir, '../wavs', preem_wav_name),hparams.sample_rate)
+
+		mel_wav = audio.inv_mel_spectrogram(mel_spectrogram,hparams)
+		audio.save_wav(mel_wav.astype(out_dtype),os.path.join(mel_dir, '../wavs', mel_filename),hparams.sample_rate)
+
+		linear_wav = audio.inv_linear_spectrogram(linear_spectrogram, hparams)
+		audio.save_wav(linear_wav.astype(out_dtype), os.path.join(linear_dir, '../wavs', linear_filename), hparams.sample_rate)
+
+
+
 	# Write the spectrogram and audio to disk
 	audio_filename = 'audio-{}.npy'.format(index)
 	mel_filename = 'mel-{}.npy'.format(index)
@@ -174,6 +208,8 @@ def _process_utterance(mel_dir, linear_dir, wav_dir, index, wav_path, text, hpar
 	np.save(os.path.join(wav_dir, audio_filename), out.astype(out_dtype), allow_pickle=False)
 	np.save(os.path.join(mel_dir, mel_filename), mel_spectrogram.T, allow_pickle=False)
 	np.save(os.path.join(linear_dir, linear_filename), linear_spectrogram.T, allow_pickle=False)
+
+
 
 	# Return a tuple describing this training example
 	return (audio_filename, mel_filename, linear_filename, time_steps, mel_frames, text)

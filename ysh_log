@@ -1,0 +1,22 @@
+python preprocess_ysh.py --dataset_path ./data/new_annotation --dataset Blizzard2012 --output blizzard_training_data_maxmel_1700_clip_norescale_fmax_3600
+CUDA_VISIBLE_DEVICES=0 python synthesize_ysh.py --mode eval_folder --checkpoint logs-rayhane-Tacotron/taco_pretrained/blizzard_fintune_0217_158k/
+
+0310
+try to set rescale to False to improve preprocessed quality, and use 6 gpu to have bigger batchsize, trained to 48k and stopped
+want to set fmax to 3600 and start again, and also use 48k to train a wavenet
+logs/logs-rayhane-Tacotron_blizzard_pretrain_sym69_6gpu_norescale/taco_pretrained/tacotron_model.ckpt-48000
+begin a new train in logs-rayhane-Tacotron_blizzard_pretrain_sym69_4gpu_norescale_fmax3600/ also change reg weight to 1e-5(bigger)
+
+
+0311
+run wavenet train on blizzard_pretrain_sym69_6gpu_norescale, first run synthesize_ysh.py to generate mels use this 48k ckpt
+at tacotron_output/output_blizzard_pretrain_sym69_6gpu_norescale_ckpt48000_wavenet_train/gta/map.txt
+then run train_ysh.py --model Wavenet --wavenet_input ...
+notice that wavenet now can not run on multiple gpus
+and wavenet loss can be negative numbers
+
+
+
+0312
+wavenet loss exploded and we did not see negative loss last time, will that be the rescale issue?
+whatever we just run that again and it maybe can train after that, just wait it explode again...

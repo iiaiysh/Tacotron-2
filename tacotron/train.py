@@ -233,11 +233,11 @@ def train(log_dir, args, hparams):
 					log('Loss exploded to {:.5f} at step {}'.format(loss, step))
 					raise Exception('Loss exploded')
 
-				if step % args.summary_interval == 0:
+				if step % args.summary_interval == 0 or step== 1:
 					log('\nWriting summary at step {}'.format(step))
 					summary_writer.add_summary(sess.run(stats), step)
 
-				if step % args.eval_interval == 0:
+				if step % args.eval_interval == 0 or step== 1:
 					#Run eval and save eval stats
 					log('\nRunning evaluation at step {}'.format(step))
 

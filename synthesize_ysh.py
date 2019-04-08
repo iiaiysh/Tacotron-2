@@ -8,7 +8,7 @@ import tensorflow as tf
 from hparams import hparams
 from infolog import log
 from tacotron.synthesize_ysh import tacotron_synthesize
-from wavenet_vocoder.synthesize import wavenet_synthesize
+from wavenet_vocoder.synthesize_ysh import wavenet_synthesize
 
 from hparams_ysh import hparams_ysh, update_hp1_with_hp2
 
@@ -20,10 +20,10 @@ def prepare_run(args):
 	os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 	run_name = args.name or args.tacotron_name or args.model
-	taco_checkpoint = os.path.join('logs-' + run_name, 'taco_' + args.checkpoint)
+	taco_checkpoint = os.path.join('logs-' + run_name, 'taco_pretrained')
 
 	run_name = args.name or args.wavenet_name or args.model
-	wave_checkpoint = os.path.join('logs-' + run_name, 'wave_' + args.checkpoint)
+	wave_checkpoint = os.path.join('logs-' + run_name, 'wave_pretrained')
 	return taco_checkpoint, wave_checkpoint, modified_hp
 
 def get_sentences(args):
@@ -49,12 +49,12 @@ def synthesize(args, hparams, taco_checkpoint, wave_checkpoint, sentences):
 
 
 def main():
-	accepted_modes = ['eval', 'synthesis', 'live', 'eval_folder']
+	accepted_modes = ['eval', 'synthesis', 'live', 'eval_folder', 'eval_experiment']
 	parser = argparse.ArgumentParser()
-	parser.add_argument('--checkpoint', required=True, help='Path to model checkpoint')
+	parser.add_argument('--checkpoint', help='Path to model checkpoint')
 	parser.add_argument('--hparams', default='',
 		help='Hyperparameter overrides as a comma-separated list of name=value pairs')
-	parser.add_argument('--name', help='Name of logging directory if the two models were trained together.',required=True)
+	parser.add_argument('--name', help='Name of logging directory if the two models were trained together.')
 	parser.add_argument('--tacotron_name', help='Name of logging directory of Tacotron. If trained separately')
 	parser.add_argument('--wavenet_name', help='Name of logging directory of WaveNet. If trained separately')
 	parser.add_argument('--model', default='Tacotron')
