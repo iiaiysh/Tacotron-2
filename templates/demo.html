@@ -13,24 +13,30 @@ button[disabled] {opacity: 0.4; cursor: default}
 <body>
 <form>
   <input id="text" type="text" size="160" placeholder="Enter Text">
-  <button id="button" name="synthesize">Speak</button>
+  <button id="button1" name="synthesize">Speak</button>
+  <button id="button2" name="synthesize_split">Speak Split</button>
+  <button id="button3" name="Retrieve">Retrieve</button>
 </form>
 <p id="message"></p>
 <audio id="audio" controls autoplay hidden></audio>
+
+
 <script>
+
 function q(selector) {return document.querySelector(selector)}
 q('#text').focus()
-q('#button').addEventListener('click', function(e) {
+q('#button1').addEventListener('click', function(e) {
   text = q('#text').value.trim()
   if (text) {
     q('#message').textContent = 'Synthesizing...'
-    q('#button').disabled = true
+    q('#button1').disabled = true
     q('#audio').hidden = true
     synthesize(text)
   }
   e.preventDefault()
   return false
 })
+
 function synthesize(text) {
   fetch('/synthesize?text=' + encodeURIComponent(text), {cache: 'no-cache'})
     .then(function(res) {
@@ -38,12 +44,75 @@ function synthesize(text) {
       return res.blob()
     }).then(function(blob) {
       q('#message').textContent = ''
-      q('#button').disabled = false
+      q('#button1').disabled = false
       q('#audio').src = URL.createObjectURL(blob)
       q('#audio').hidden = false
     }).catch(function(err) {
       q('#message').textContent = 'Error: ' + err.message
-      q('#button').disabled = false
+      q('#button1').disabled = false
     })
 }
+
+// button 2
+function q(selector) {return document.querySelector(selector)}
+q('#text').focus()
+q('#button2').addEventListener('click', function(e) {
+  text = q('#text').value.trim()
+  if (text) {
+    q('#message').textContent = 'Synthesizing...'
+    q('#button2').disabled = true
+    q('#audio').hidden = true
+    synthesize_split(text)
+  }
+  e.preventDefault()
+  return false
+})
+
+function synthesize_split(text) {
+  fetch('/synthesize_split?text=' + encodeURIComponent(text), {cache: 'no-cache'})
+    .then(function(res) {
+      if (!res.ok) throw Error(res.statusText)
+      return res.blob()
+    }).then(function(blob) {
+      q('#message').textContent = ''
+      q('#button2').disabled = false
+      q('#audio').src = URL.createObjectURL(blob)
+      q('#audio').hidden = false
+    }).catch(function(err) {
+      q('#message').textContent = 'Error: ' + err.message
+      q('#button2').disabled = false
+    })
+}
+
+// button 3
+function q(selector) {return document.querySelector(selector)}
+q('#text').focus()
+q('#button3').addEventListener('click', function(e) {
+  text = q('#text').value.trim()
+  if (text) {
+    q('#message').textContent = 'Retrievaling...'
+    q('#button3').disabled = true
+    q('#audio').hidden = true
+    retrieve(text)
+  }
+  e.preventDefault()
+  return false
+})
+
+function retrieve(text) {
+  fetch('/retrieve?text=' + encodeURIComponent(text), {cache: 'no-cache'})
+    .then(function(res) {
+      if (!res.ok) throw Error(res.statusText)
+      return res.blob()
+    }).then(function(blob) {
+      q('#message').textContent = ''
+      q('#button3').disabled = false
+      q('#audio').src = URL.createObjectURL(blob)
+      q('#audio').hidden = false
+    }).catch(function(err) {
+      q('#message').textContent = 'Error: ' + err.message
+      q('#button3').disabled = false
+    })
+}
+
 </script></body></html>

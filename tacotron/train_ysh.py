@@ -53,8 +53,8 @@ def add_train_stats(model, hparams):
                 tf.summary.histogram('linear_outputs %d' % i, model.tower_linear_outputs[i])
                 tf.summary.histogram('linear_targets %d' % i, model.tower_linear_targets[i])
         
-        tf.summary.scalar('align_loss1', model.align_loss1)
-        tf.summary.scalar('align_loss2', model.align_loss2)
+        # tf.summary.scalar('align_loss1', model.align_loss1)
+        # tf.summary.scalar('align_loss2', model.align_loss2)
 
         tf.summary.scalar('regularization_loss', model.regularization_loss)
         tf.summary.scalar('stop_token_loss', model.stop_token_loss)
@@ -235,7 +235,7 @@ def train(log_dir, args, hparams):
             #Training loop
             while not coord.should_stop() and step < args.tacotron_train_steps:
                 start_time = time.time()
-                step, loss, opt, lr = sess.run([global_step, model.loss, model.optimize, model.learning_rate])
+                step, loss, opt, lr, stop_loss = sess.run([global_step, model.loss, model.optimize, model.learning_rate, model.stop_token_loss])
                 # step, loss, opt, lr, de, align, stopo, melo, lio, inp, inp_len, melt, lit, tlen, stopt = sess.run([global_step, model.loss, model.optimize, model.learning_rate,
                 #                                 model.tower_decoder_output, model.tower_alignments,
                 #                                 model.tower_stop_token_prediction, model.tower_mel_outputs, model.tower_linear_outputs,
@@ -245,8 +245,8 @@ def train(log_dir, args, hparams):
                 
                 time_window.append(time.time() - start_time)
                 loss_window.append(loss)
-                message = 'Step {:7d} [{:.3f} sec/step, loss={:.5f}, avg_loss={:.5f}, lr={:.10f}]'.format(
-                    step, time_window.average, loss, loss_window.average, lr)
+                message = 'Step {:7d} [{:.3f} sec/step,stop_loss={:.5f}, loss={:.5f}, avg_loss={:.5f}, lr={:.10f}]'.format(
+                    step, time_window.average, stop_loss, loss, loss_window.average, lr)
                 log(message, end='\r', slack=(step % args.checkpoint_interval == 0))
 
                 if hparams.find_lr:

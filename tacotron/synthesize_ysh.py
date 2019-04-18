@@ -11,8 +11,12 @@ from tacotron.synthesizer_ysh_split_init_load import Synthesizer_Split
 from tacotron.synthesizer_ysh import Synthesizer
 
 from tqdm import tqdm
+from tacotron.utils.text import line_split
 
+import logging
+import numpy as np
 
+from datasets.audio import load_wav, save_wav
 def generate_fast(model, text):
     model.synthesize([text], None, None, None, None)
 
@@ -197,6 +201,105 @@ def run_eval_folder(args, checkpoint_path, output_dir, hparams, sentences):
 
     return eval_dir
 
+def run_eval_record(args, checkpoint_path, output_dir, hparams):
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(threadName)-12.12s] [%(levelname)-5.5s]  %(message)s",
+        handlers=[
+            logging.FileHandler(f"{__file__.split('/')[-1].split('.')[0]}.log"),
+            logging.StreamHandler()
+        ])
+    logger = logging.getLogger()
+
+    eval_dir = os.path.join(output_dir, 'eval')
+    log_dir = os.path.join(output_dir, 'logs-eval')
+
+
+
+    if args.model == 'Tacotron-2':
+        assert os.path.normpath(eval_dir) == os.path.normpath(args.mels_dir)
+
+    #Create output path if it doesn't exist
+    os.makedirs(eval_dir, exist_ok=True)
+    os.makedirs(log_dir, exist_ok=True)
+    os.makedirs(os.path.join(log_dir, 'wavs'), exist_ok=True)
+    os.makedirs(os.path.join(log_dir, 'plots'), exist_ok=True)
+    os.makedirs(os.path.join(log_dir, 'plots-linear'), exist_ok=True)
+    os.makedirs(os.path.join(log_dir, 'plots-mel'), exist_ok=True)
+    os.makedirs(os.path.join(log_dir, 'plots-align'), exist_ok=True)
+
+    log(hparams_debug_string())
+
+
+
+    cur_path = os.path.dirname(os.path.realpath(__file__))
+    record_txt_name = 'new_record_txt_line'
+    record_wav_name = 'record_wav'
+    record_txt_path = os.path.join(cur_path, os.pardir, record_txt_name)
+    record_wav_path = os.path.join(cur_path, os.pardir, record_wav_name)
+    os.makedirs(record_wav_path, exist_ok=True)
+
+
+
+
+    record_txt_list = os.listdir(record_txt_path)
+
+    synth = Synthesizer_Split(hparams)
+    synth.load(checkpoint_path)
+
+
+    for i_file, file_path in enumerate(record_txt_list):
+        # fw = open(log_file, 'a')
+        try:
+
+
+            f = open(os.path.join(record_txt_path, file_path), 'r', encoding='utf-8')
+            lines = f.readlines()
+            logger.debug(f'synthesize in the file...{file_path}')
+
+            line = lines[0]
+
+            line_name = file_path
+            save_path = f'{os.path.join(record_wav_path, line_name)}.mp3'
+
+            if os.path.exists(save_path):
+                print(f'[{i_file}]/[{len(record_txt_list)}] {file_path} already synthesized')
+                continue
+            else:
+                print(f'[{i_file}]/[{len(record_txt_list)}] {file_path} synthesizing ...')
+
+            line_parts = line_split(line)
+            wav_parts = []
+            for i_part, line_part in enumerate(line_parts, start=1):
+
+                line_name_part = f'{line_name}-p{i_part}'
+                wav_parts.append(os.path.join(log_dir, 'wavs', f'wav-{line_name_part}-linear.wav'))
+                synth.synthesize([line_part], [line_name_part], eval_dir, log_dir, None)
+
+            if len(wav_parts) == 1:
+                os.system(f'cp {wav_parts[0]} {save_path}')
+            elif len(wav_parts) > 1:
+                wav_concate = None
+                for wav_part in wav_parts:
+                    wav_tmp = load_wav(wav_part, sr=hparams.sample_rate)
+                    if wav_concate is None:
+                        wav_concate = wav_tmp
+                    else:
+                        wav_concate = np.concatenate([wav_concate, wav_tmp])
+                save_wav(wav_concate, save_path, hparams.sample_rate)
+            else:
+                raise RuntimeError('why wav_parts have no items')
+            f.close()
+            # fw.write(os.path.join(record_txt_path, file_path))
+            # fw.write('\n')
+        except:
+            print('can not open file ', file_path)
+        finally:
+            # fw.close()
+            pass
+    return eval_dir
+
+
 def run_synthesis(args, checkpoint_path, output_dir, hparams):
     GTA = (args.GTA == 'True')
     if GTA:
@@ -245,8 +348,12 @@ def tacotron_synthesize(args, hparams, checkpoint, sentences=None):
     if args.mode == 'eval_folder':
         output_dir = os.path.join(output_dir, 'output_'+ os.path.basename(os.path.abspath(args.checkpoint)))
         print(f'save output in output_{os.path.basename(os.path.abspath(args.checkpoint))}')
+    elif args.mode == 'record':
+        output_dir = os.path.join(output_dir, 'output_record')
+
     else:
         output_dir = os.path.join(output_dir, 'output_'+args.name)
+
     try:
         # checkpoint_path = tf.train.get_checkpoint_state(checkpoint).model_checkpoint_path
         checkpoint_path = args.checkpoint
@@ -270,5 +377,7 @@ def tacotron_synthesize(args, hparams, checkpoint, sentences=None):
         return run_eval_experiment(args, checkpoint_path, output_dir, hparams, sentences)
     elif args.mode == 'synthesis':
         return run_synthesis(args, checkpoint_path, output_dir, hparams)
+    elif args.mode == 'record':
+        return run_eval_record(args, checkpoint_path, output_dir, hparams)
     else:
         run_live(args, checkpoint_path, hparams)

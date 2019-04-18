@@ -41,6 +41,33 @@ _abbreviations = [(re.compile('\\b%s\\.' % x[0], re.IGNORECASE), x[1]) for x in 
   ('ft', 'fort'),
 ]]
 
+# List of (regular expression, replacement) pairs for abbreviations:
+_yshmarks_1 = [(re.compile('\\b%s\\b' % x[0], re.IGNORECASE), x[1]) for x in [
+  ('IBM', 'II BE eMm'),
+  ('OK', 'okey'),
+  ('idea', 'idearr'),
+  ('cool', 'cruel'),
+  ('truth', 'truthh'),
+  ('hi', 'hey'),
+  ('error', 'eyeroow'),
+  ('Neha', 'Nee haa'),
+  ('childhood', 'chaild huodd'),
+  ('today', 'todayy'),
+
+]]
+
+_yshmarks_2 = [(re.compile('\\b%s\\b' % x[0],), x[1]) for x in [
+  ('AM', 'ay em'),
+  ('PM', 'pee eMm'),
+
+]]
+
+def expand_yshmarks(text):
+  for regex, replacement in _yshmarks_1:
+    text = re.sub(regex, replacement, text)
+  for regex, replacement in _yshmarks_2:
+    text = re.sub(regex, replacement, text)
+  return text
 
 def expand_abbreviations(text):
   for regex, replacement in _abbreviations:
@@ -88,4 +115,20 @@ def english_cleaners(text):
   text = expand_numbers(text)
   text = expand_abbreviations(text)
   text = collapse_whitespace(text)
+  return text
+
+def ysh_cleaners(text):
+  '''Pipeline for English text, including number and abbreviation expansion.'''
+  text = convert_to_ascii(text)
+  # text = lowercase(text)
+  text = expand_numbers(text)
+  text = expand_abbreviations(text)
+  text = collapse_whitespace(text)
+
+  text = expand_yshmarks(text)
+
+  # add stop mark in the last if no punctuation
+  if re.match('[a-zA-Z]', text[-1]):
+    text = text + '.'
+  print(f'cleaned: {text}')
   return text

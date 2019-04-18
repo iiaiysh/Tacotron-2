@@ -156,12 +156,14 @@ class Tacotron_ysh():
 						frame_projection,
 						stop_projection)
 
-
-					#Define the helper for our decoder
-					if is_training or is_evaluating or gta:
-						self.helper = TacoTrainingHelper(batch_size, tower_mel_targets[i], hp, gta, is_evaluating, global_step)
-					else:
+					if self._hparams.nohelper:
 						self.helper = TacoTestHelper(batch_size, hp)
+					else:
+						#Define the helper for our decoder
+						if is_training or is_evaluating or gta:
+							self.helper = TacoTrainingHelper(batch_size, tower_mel_targets[i], hp, gta, is_evaluating, global_step)
+						else:
+							self.helper = TacoTestHelper(batch_size, hp)
 
 
 					#initial decoder state
@@ -242,7 +244,7 @@ class Tacotron_ysh():
 			log('initialisation done {}'.format(gpus[i]))
 
 
-		if is_training:
+		if is_training and self._hparams.tacotron_teacher_forcing_mode == 'scheduled':
 			self.ratio = self.helper._ratio
 		self.tower_inputs = tower_inputs
 		self.tower_input_lengths = tower_input_lengths
@@ -385,6 +387,7 @@ class Tacotron_ysh():
 					# self.tower_align_loss2.append(loss2)
 
 					# Compute final loss term
+					stop_token_loss = hp.stop_token_loss_ratio * stop_token_loss
 					self.tower_before_loss.append(before)
 					self.tower_after_loss.append(after)
 					self.tower_stop_token_loss.append(stop_token_loss)

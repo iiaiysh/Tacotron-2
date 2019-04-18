@@ -6,6 +6,12 @@ _wavenet_num_gpus = 1
 # Default hyperparameters
 hparams_ysh = tf.contrib.training.HParams(
 
+	tacotron_synthesis_batch_size=1,
+	# DO NOT MAKE THIS BIGGER THAN 1 IF YOU DIDN'T TRAIN TACOTRON WITH "mask_encoder=True"!!
+
+	stop_token_loss_ratio=1,
+	nohelper = False,
+
 	is_training=True,
 
 	tacotron_fine_tuning=False, #Set to True to freeze encoder and only keep training pretrained decoder. Used for speaker adaptation with small data.
@@ -31,24 +37,25 @@ hparams_ysh = tf.contrib.training.HParams(
 	tacotron_num_gpus=_tacotron_num_gpus,  # Determines the number of gpus in use for Tacotron training.
 	tacotron_batch_size=32*_tacotron_num_gpus,  # number of training samples on each training steps, should be N*32
 	# tacotron_reg_weight=1e-5,  # regularization weight (for L2 regularization)
-	tacotron_synthesis_batch_size=1, # DO NOT MAKE THIS BIGGER THAN 1 IF YOU DIDN'T TRAIN TACOTRON WITH "mask_encoder=True"!!
 	tacotron_dropout_rate_synthesis = 0.5,
 	tacotron_initial_learning_rate=1e-3,  # starting learning rate, 3e-4 pick for the blizzard 90k finetune
 	tacotron_final_learning_rate = 1e-4, #minimal learning rate
 
 	experiment_preprocess=False,#whther to experiment preprocess
 
-	tacotron_start_decay=40000+158000,  # Step at which learning decay starts
+	tacotron_start_decay=40000,  # Step at which learning decay starts
 
 	find_lr = False, #whether to use cyclic lr find
 	findlr_initial_learning_rate=1e-6,
 	findlr_speed=1.02,
 
 	test_lr = False,
-	test_lr_min = 1e-5,
+	test_lr_min = 1e-4,
 	test_lr_max = 1e-3,
-	test_lr_stepsize_num_epoch = 5,
-	test_lr_one_epoch_step = 20,
+	test_lr_stepsize_num_epoch = 10,
+	test_lr_one_epoch_step = 30,
+
+	# decode max iter
 	max_iters = 5000,
 
 

@@ -13,8 +13,8 @@ from wavenet_vocoder.synthesize_ysh import wavenet_synthesize
 from hparams_ysh import hparams_ysh, update_hp1_with_hp2
 
 def prepare_run(args):
+	update_hp1_with_hp2(hparams, hparams_ysh)
 	modified_hp = hparams.parse(args.hparams)
-	update_hp1_with_hp2(modified_hp, hparams_ysh)
 	modified_hp.set_hparam('tacotron_num_gpus', 1)
 
 	os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
@@ -49,7 +49,7 @@ def synthesize(args, hparams, taco_checkpoint, wave_checkpoint, sentences):
 
 
 def main():
-	accepted_modes = ['eval', 'synthesis', 'live', 'eval_folder', 'eval_experiment']
+	accepted_modes = ['eval', 'synthesis', 'live', 'eval_folder', 'eval_experiment', 'record']
 	parser = argparse.ArgumentParser()
 	parser.add_argument('--checkpoint', help='Path to model checkpoint')
 	parser.add_argument('--hparams', default='',
