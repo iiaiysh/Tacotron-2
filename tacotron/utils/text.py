@@ -115,7 +115,7 @@ def line_split(text):
     text_split_final_final = []
     last_item = ''
     for item in text_split_final:
-        if len((last_item +' '+item).split(' ')) < 5:
+        if len((last_item +' '+item).strip().split(' ')) < 5:
             last_item = last_item +' '+item
             continue
         else:

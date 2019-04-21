@@ -19,6 +19,19 @@ def split_func(x, split_pos):
 		start += split_pos[i]
 	return rst
 
+
+def get_align_mask(in_lens, out_lens, i_align):
+	mask = np.ones([in_lens[i_align], out_lens[i_align]])
+	k = 0.001
+	N = mask.shape[1]
+	T = mask.shape[0]
+	for i in range(T):
+		for j in range(N):
+			mask[i, j] = 1 - np.math.exp(-np.math.pow(i / T - j / N, 2) / k)
+	mask = np.pad(mask, ((0, tf.reduce_max(in_lens)-in_lens[i_align]), (0, tf.reduce_max(out_lens)-out_lens[i_align])), 'constant', constant_values=1)
+
+	return tf.convert_to_tensor(mask)
+
 class Tacotron_ysh():
 	"""Tacotron-2 Feature prediction Model.
 	"""
@@ -287,9 +300,8 @@ class Tacotron_ysh():
 		self.tower_stop_token_loss = []
 		self.tower_regularization_loss = []
 		self.tower_linear_loss = []
-		# self.tower_align_loss1 = []
-		# self.tower_align_loss2 = []
 		self.tower_loss = []
+		self.tower_align_loss = []
 
 		total_before_loss = 0
 		total_after_loss= 0
@@ -297,6 +309,7 @@ class Tacotron_ysh():
 		total_regularization_loss = 0
 		total_linear_loss = 0
 		total_loss = 0
+		total_align_loss = 0
 
 		# total_align_loss1 = 0
 		# total_align_loss2 = 0
@@ -358,33 +371,21 @@ class Tacotron_ysh():
 							or 'RNN' in v.name or 'LSTM' in v.name)]) * reg_weight
 
 
-					# # align loss
-					# aligns = self.tower_alignments[i]
-					# in_lens = self.tower_input_lengths[i]
-					# out_lens = self.tower_targets_lengths[i]
-					# loss1 = 0
-					# loss2 = 0
-					# for i_align in range(hp.tacotron_batch_size):
-					# 	in_len = in_lens[i_align]
-					# 	out_len = out_lens[i_align]
-					# 	align = aligns[i_align]
-					#
-					# 	# mask_not_roi = np.ones(align.shape)
-					# 	# mask_not_roi[:in_len-1, :out_len-1] = 0
-					# 	# mask_not_roi_tensor = tf.constant(mask_not_roi)
-					# 	#
-					# 	align_roi = align[:in_len-1, :out_len-1]
-					# 	#
-					# 	# v_should_be_small1 = tf.reduce_sum(align * mask_not_roi_tensor)
-					# 	# loss1 += v_should_be_small1
-					#
-					# 	mean, std = tf.nn.moments(align, axes=0)
-					# 	v_should_be_small2 = tf.reduce_sum(1 / std)
-					# 	loss2 += v_should_be_small2 * 1e-6
-					#
-					#
-					# self.tower_align_loss1.append(loss1)
-					# self.tower_align_loss2.append(loss2)
+					# align loss
+					aligns = self.tower_alignments[i]
+					in_lens = self.tower_input_lengths[i]
+					out_lens = self.tower_targets_lengths[i]
+
+					align_loss = 0
+					for i_align in range(hp.tacotron_batch_size):
+						align = aligns[i_align]
+
+						align_mask_sample = get_align_mask(in_lens, out_lens, i_align)
+						align_loss_sample = tf.reduce_mean(align * align_mask_sample)
+
+						align_loss += align_loss_sample
+
+
 
 					# Compute final loss term
 					stop_token_loss = hp.stop_token_loss_ratio * stop_token_loss
@@ -393,9 +394,9 @@ class Tacotron_ysh():
 					self.tower_stop_token_loss.append(stop_token_loss)
 					self.tower_regularization_loss.append(regularization)
 					self.tower_linear_loss.append(linear_loss)
+					self.tower_align_loss.append(align_loss)
 
-					tower_loss = before + after + stop_token_loss + regularization + linear_loss
-					# tower_loss = before + after + stop_token_loss + regularization + linear_loss + loss1 + loss2
+					tower_loss = before + after + stop_token_loss + regularization + linear_loss + align_loss
 					self.tower_loss.append(tower_loss)
 
 			total_before_loss += before
@@ -404,9 +405,9 @@ class Tacotron_ysh():
 			total_regularization_loss += regularization
 			total_linear_loss += linear_loss
 			total_loss += tower_loss
+			total_align_loss += align_loss
 
-			# total_align_loss1 += loss1
-			# total_align_loss2 += loss2
+
 
 		self.before_loss = total_before_loss / hp.tacotron_num_gpus
 		self.after_loss = total_after_loss / hp.tacotron_num_gpus
@@ -415,8 +416,8 @@ class Tacotron_ysh():
 		self.linear_loss = total_linear_loss / hp.tacotron_num_gpus
 		self.loss = total_loss / hp.tacotron_num_gpus
 
-		# self.align_loss1 = total_align_loss1 / hp.tacotron_num_gpus
-		# self.align_loss2 = total_align_loss2 / hp.tacotron_num_gpus
+		self.align_loss = total_align_loss / hp.tacotron_num_gpus
+
 
 
 

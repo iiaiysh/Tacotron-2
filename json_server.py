@@ -15,6 +15,8 @@ from tacotron.synthesizer_ysh_split_init_load import Synthesizer_Split
 from datasets.audio import load_wav, save_wav
 from tacotron.utils.text import line_split
 
+import uuid
+
 def precess2syninput(text):
     replace_marks = ',:-;.?!'
     for mark in replace_marks:
@@ -69,11 +71,11 @@ def synthesize_no_split():
 
 @app.route('/synthesize', methods=['GET', 'POST'])
 def synthesize():
-    print('synthesize split...')
+    print('\nsynthesize split...')
     text = request.values.get('text')
     # text.replace(',', ':')
     # wav_name = text.split(' ')[0]
-    wav_name = 'tmp'
+    wav_name = f'tmp-{str(uuid.uuid1())}'
     text_split = line_split(text)
 
     output_dir = os.path.join('tacotron_output', 'output_tmp')
@@ -90,35 +92,64 @@ def synthesize():
     os.makedirs(os.path.join(log_dir, 'plots-align'), exist_ok=True)
 
     wav_name_part_list = []
+    wav_path_list = []
     for i_part, part_text in enumerate(text_split):
         texts = [part_text]
         wav_name_part = f'{wav_name}-p{i_part}'
         wav_name_part_list.append(wav_name_part)
 
         # # return send_file(io.BytesIO(data), mimetype='audio/wav')
+        for i_repeat in range(5):
+            wav_path, wav_duration = synthesizer.synthesize(texts, [f'{wav_name_part}'], eval_dir, log_dir, ['/raid1/stephen/rayhane-tc2/Tacotron-2/training_data/blizzard_training_data_maxmel_1700_clip_norescale/mels/mel-TheManThatCorruptedHadleyburg_chp37_00020.npy'], return_wav=True, wav_format='mp3')
+            char_ratio = wav_duration / len(part_text)
+            word_ratio = wav_duration / len(part_text.split(' '))
+            print(f'         [char:{char_ratio:.4f}] [word:{word_ratio:.4f}]', wav_path)
+            if char_ratio < 0.1 and word_ratio < 0.8:
+                break
+        wav_path_list.append(wav_path)
 
-        synthesizer.synthesize(texts, [f'{wav_name_part}'], eval_dir, log_dir, ['/raid1/stephen/rayhane-tc2/Tacotron-2/training_data/blizzard_training_data_maxmel_1700_clip_norescale/mels/mel-TheManThatCorruptedHadleyburg_chp37_00020.npy'], return_wav=True, wav_format='mp3')
+    # use wav_name_part_list to concatenate
+    # #concate parts into whole wav
+    # whole_path = os.path.join(log_dir, f'wavs/wav-{wav_name}-linear.mp3')
+    # if len(wav_name_part_list) == 1:
+    #     part0_path = os.path.join(log_dir, f'wavs/wav-{wav_name_part_list[0]}-linear.mp3')
+    #     os.system(f'cp {part0_path} {whole_path}')
+    #
+    # elif len(wav_name_part_list) > 1:
+    #     wav_concate = None
+    #     for wav_part in wav_name_part_list:
+    #         part_path = os.path.join(log_dir, f'wavs/wav-{wav_part}-linear.mp3')
+    #         wav_tmp = load_wav(part_path, sr=hparams.sample_rate)
+    #         if wav_concate is None:
+    #             wav_concate = wav_tmp
+    #         else:
+    #             wav_concate = np.concatenate([wav_concate, wav_tmp])
+    #     save_wav(wav_concate, whole_path, hparams.sample_rate)
+    # else:
+    #     raise RuntimeError('why wav_parts have no items')
 
 
-
+    # use wav_path_list to concatenate
     #concate parts into whole wav
     whole_path = os.path.join(log_dir, f'wavs/wav-{wav_name}-linear.mp3')
-    if len(wav_name_part_list) == 1:
-        part0_path = os.path.join(log_dir, f'wavs/wav-{wav_name_part_list[0]}-linear.mp3')
+
+    if len(wav_path_list) == 1:
+        part0_path = wav_path_list[0]
         os.system(f'cp {part0_path} {whole_path}')
 
-    elif len(wav_name_part_list) > 1:
+    elif len(wav_path_list) > 1:
         wav_concate = None
-        for wav_part in wav_name_part_list:
-            part_path = os.path.join(log_dir, f'wavs/wav-{wav_part}-linear.mp3')
-            wav_tmp = load_wav(part_path, sr=hparams.sample_rate)
+        for wav_path in wav_path_list:
+            wav_tmp = load_wav(wav_path, sr=hparams.sample_rate)
             if wav_concate is None:
                 wav_concate = wav_tmp
             else:
-                wav_concate = np.concatenate([wav_concate, wav_tmp])
+                both_max_value = max(np.max(np.abs(wav_tmp)), np.max(np.abs(wav_tmp)))
+                wav_concate = np.concatenate([wav_concate/np.max(np.abs(wav_concate))*both_max_value, wav_tmp/np.max(np.abs(wav_tmp))*both_max_value])
         save_wav(wav_concate, whole_path, hparams.sample_rate)
     else:
         raise RuntimeError('why wav_parts have no items')
+
 
     # return send_file(io.BytesIO(data), mimetype='audio/wav')
     return send_file(whole_path, mimetype='audio/mp3')

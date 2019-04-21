@@ -241,13 +241,16 @@ class Synthesizer_Split:
 						wav = audio.inv_preemphasis(wav, hparams.preemphasis, hparams.preemphasize)
 					else:
 						wav = audio.inv_linear_spectrogram(linears[i].T, hparams)
-					audio.save_wav(wav, os.path.join(log_dir, 'wavs/wav-{}-linear.{}'.format(basenames[i], wav_format)), sr=hparams.sample_rate)
+
+					wav_duration = len(wav) / hparams.sample_rate
+					wav_path = os.path.join(log_dir, 'wavs/wav-{}-linear.{}'.format(basenames[i], wav_format))
+					audio.save_wav(wav, wav_path, sr=hparams.sample_rate)
 
 					#save linear spectrogram plot
 					plot.plot_spectrogram(linears[i], os.path.join(log_dir, 'plots-linear/linear-{}.png'.format(basenames[i])),
 						title='{}'.format(texts[i]), split_title=True, auto_aspect=True)
 
-		return saved_mels_paths, speaker_ids
+		return wav_path, wav_duration
 
 	def _round_up(self, x, multiple):
 		remainder = x % multiple

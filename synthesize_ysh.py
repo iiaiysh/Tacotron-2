@@ -49,7 +49,7 @@ def synthesize(args, hparams, taco_checkpoint, wave_checkpoint, sentences):
 
 
 def main():
-	accepted_modes = ['eval', 'synthesis', 'live', 'eval_folder', 'eval_experiment', 'record']
+	accepted_modes = ['eval', 'synthesis', 'live', 'eval_folder', 'eval_experiment', 'record', 'record_online']
 	parser = argparse.ArgumentParser()
 	parser.add_argument('--checkpoint', help='Path to model checkpoint')
 	parser.add_argument('--hparams', default='',

@@ -53,8 +53,7 @@ def add_train_stats(model, hparams):
                 tf.summary.histogram('linear_outputs %d' % i, model.tower_linear_outputs[i])
                 tf.summary.histogram('linear_targets %d' % i, model.tower_linear_targets[i])
         
-        # tf.summary.scalar('align_loss1', model.align_loss1)
-        # tf.summary.scalar('align_loss2', model.align_loss2)
+        tf.summary.scalar('align_loss', model.align_loss)
 
         tf.summary.scalar('regularization_loss', model.regularization_loss)
         tf.summary.scalar('stop_token_loss', model.stop_token_loss)
@@ -67,13 +66,14 @@ def add_train_stats(model, hparams):
         tf.summary.scalar('max_gradient_norm', tf.reduce_max(gradient_norms)) #visualize gradients (in case of explosion)
         return tf.summary.merge_all()
 
-def add_eval_stats(summary_writer, step, linear_loss, before_loss, after_loss, stop_token_loss, loss, reg_loss):
+def add_eval_stats(summary_writer, step, linear_loss, before_loss, after_loss, stop_token_loss, loss, reg_loss, align_loss):
     values = [
     tf.Summary.Value(tag='Tacotron_eval_model/eval_stats/eval_before_loss', simple_value=before_loss),
     tf.Summary.Value(tag='Tacotron_eval_model/eval_stats/eval_after_loss', simple_value=after_loss),
     tf.Summary.Value(tag='Tacotron_eval_model/eval_stats/stop_token_loss', simple_value=stop_token_loss),
     tf.Summary.Value(tag='Tacotron_eval_model/eval_stats/eval_loss', simple_value=loss),
     tf.Summary.Value(tag='Tacotron_eval_model/eval_stats/regularization_loss', simple_value=reg_loss),
+    tf.Summary.Value(tag='Tacotron_eval_model/eval_stats/align_loss', simple_value=align_loss),
     ]
     if linear_loss is not None:
         values.append(tf.Summary.Value(tag='Tacotron_eval_model/eval_stats/eval_linear_loss', simple_value=linear_loss))
@@ -235,18 +235,21 @@ def train(log_dir, args, hparams):
             #Training loop
             while not coord.should_stop() and step < args.tacotron_train_steps:
                 start_time = time.time()
-                step, loss, opt, lr, stop_loss = sess.run([global_step, model.loss, model.optimize, model.learning_rate, model.stop_token_loss])
-                # step, loss, opt, lr, de, align, stopo, melo, lio, inp, inp_len, melt, lit, tlen, stopt = sess.run([global_step, model.loss, model.optimize, model.learning_rate,
-                #                                 model.tower_decoder_output, model.tower_alignments,
-                #                                 model.tower_stop_token_prediction, model.tower_mel_outputs, model.tower_linear_outputs,
-                #                                 model.tower_inputs, model.tower_input_lengths,
-                #                                 model.tower_mel_targets, model.tower_linear_targets,
-                #                                 model.tower_targets_lengths, model.tower_stop_token_targets])
+                step, loss, opt, lr, stop_loss, align_loss = sess.run([global_step, model.loss, model.optimize, model.learning_rate, model.stop_token_loss, model.align_loss])
+                # step, loss, opt, lr, de, align, stopo, melo, lio, inp, inp_len, melt, lit, tlen, stopt, stop_loss \
+                #     = sess.run([global_step, model.loss, model.optimize, model.learning_rate,
+                #                 model.tower_decoder_output, model.tower_alignments,
+                #                 model.tower_stop_token_prediction, model.tower_mel_outputs, model.tower_linear_outputs,
+                #                 model.tower_inputs, model.tower_input_lengths,
+                #                 model.tower_mel_targets, model.tower_linear_targets,
+                #                 model.tower_targets_lengths, model.tower_stop_token_targets,
+                #                 model.stop_token_loss
+                #                 ])
                 
                 time_window.append(time.time() - start_time)
                 loss_window.append(loss)
-                message = 'Step {:7d} [{:.3f} sec/step,stop_loss={:.5f}, loss={:.5f}, avg_loss={:.5f}, lr={:.10f}]'.format(
-                    step, time_window.average, stop_loss, loss, loss_window.average, lr)
+                message = 'Step {:7d} [{:.3f} sec/step, stop_loss={:.5f}, loss={:.5f}, avg_loss={:.5f}, lr={:.10f}, align_loss={:.5f},]'.format(
+                    step, time_window.average, stop_loss, loss, loss_window.average, lr, align_loss)
                 log(message, end='\r', slack=(step % args.checkpoint_interval == 0))
 
                 if hparams.find_lr:
@@ -332,7 +335,7 @@ def train(log_dir, args, hparams):
 
                     log('Eval loss for global step {}: {:.3f}'.format(step, eval_loss))
                     log('Writing eval summary!')
-                    add_eval_stats(summary_writer, step, linear_loss, before_loss, after_loss, stop_token_loss, eval_loss, reg_loss)
+                    add_eval_stats(summary_writer, step, linear_loss, before_loss, after_loss, stop_token_loss, eval_loss, reg_loss, align_loss)
 
 
                 if step % args.checkpoint_interval == 0 or step == args.tacotron_train_steps or step == 300:

@@ -59,6 +59,7 @@ _yshmarks_1 = [(re.compile('\\b%s\\b' % x[0], re.IGNORECASE), x[1]) for x in [
 _yshmarks_2 = [(re.compile('\\b%s\\b' % x[0],), x[1]) for x in [
   ('AM', 'ay em'),
   ('PM', 'pee eMm'),
+  ('MSDOS', 'eMm eS DaoS'),
 
 ]]
 

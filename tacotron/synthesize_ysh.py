@@ -17,6 +17,8 @@ import logging
 import numpy as np
 
 from datasets.audio import load_wav, save_wav
+
+import requests
 def generate_fast(model, text):
     model.synthesize([text], None, None, None, None)
 
@@ -189,8 +191,8 @@ def run_eval_folder(args, checkpoint_path, output_dir, hparams, sentences):
                     basenames = ['step_{}_batch_{}_sentence_{}'.format(ckpt_step, i, j) for j in range(len(texts))]
                     mel_filenames, speaker_ids = synth.synthesize(texts, basenames, eval_dir, log_dir, None)
 
-                    for elems in zip(texts, mel_filenames, speaker_ids):
-                        file.write('|'.join([str(x) for x in elems]) + '\n')
+                    # for elems in zip(texts, mel_filenames, speaker_ids):
+                    #     file.write('|'.join([str(x) for x in elems]) + '\n')
 
         else:
             log(f'[{i+1}/{len(ckpt_list)}] ckpt {ckpt} already synthesized in output_{args.name} folder, continue...')
@@ -299,6 +301,95 @@ def run_eval_record(args, checkpoint_path, output_dir, hparams):
             pass
     return eval_dir
 
+def run_eval_record_online(args, checkpoint_path, output_dir, hparams):
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(threadName)-12.12s] [%(levelname)-5.5s]  %(message)s",
+        handlers=[
+            logging.FileHandler(f"{__file__.split('/')[-1].split('.')[0]}.log"),
+            logging.StreamHandler()
+        ])
+    logger = logging.getLogger()
+
+    eval_dir = os.path.join(output_dir, 'eval')
+    log_dir = os.path.join(output_dir, 'logs-eval')
+
+
+
+    if args.model == 'Tacotron-2':
+        assert os.path.normpath(eval_dir) == os.path.normpath(args.mels_dir)
+
+    #Create output path if it doesn't exist
+    os.makedirs(eval_dir, exist_ok=True)
+    os.makedirs(log_dir, exist_ok=True)
+    os.makedirs(os.path.join(log_dir, 'wavs'), exist_ok=True)
+    os.makedirs(os.path.join(log_dir, 'plots'), exist_ok=True)
+    os.makedirs(os.path.join(log_dir, 'plots-linear'), exist_ok=True)
+    os.makedirs(os.path.join(log_dir, 'plots-mel'), exist_ok=True)
+    os.makedirs(os.path.join(log_dir, 'plots-align'), exist_ok=True)
+
+    log(hparams_debug_string())
+
+
+
+    cur_path = os.path.dirname(os.path.realpath(__file__))
+    record_txt_name = 'new_record_txt_line'
+    record_wav_name = 'record_wav_5002'
+    record_txt_path = os.path.join(cur_path, os.pardir, record_txt_name)
+    record_wav_path = os.path.join(cur_path, os.pardir, record_wav_name)
+    os.makedirs(record_wav_path, exist_ok=True)
+
+
+    record_txt_list = os.listdir(record_txt_path)
+
+
+
+    for i_file, file_path in enumerate(record_txt_list):
+        # fw = open(log_file, 'a')
+        line_name = file_path
+        save_path = f'{os.path.join(record_wav_path, line_name)}.mp3'
+
+        if os.path.exists(save_path):
+            print(f'[{i_file}]/[{len(record_txt_list)}] {file_path} already synthesized')
+            continue
+        else:
+            print(f'[{i_file}]/[{len(record_txt_list)}] {file_path} synthesizing ...')
+
+        try:
+            f = open(os.path.join(record_txt_path, file_path), 'r', encoding='utf-8')
+            lines = f.readlines()
+            f.close()
+        except:
+            print('can not open file ', file_path)
+            continue
+
+        logger.debug(f'synthesize in the file...{file_path}')
+
+        try:
+            assert len(lines) > 0
+            line = lines[0]
+        except:
+            print(f'file {file_path} has no text')
+            continue
+
+
+
+
+
+        try:
+            r = requests.post('http://10.10.0.42:5002/synthesize', data={'text': line.strip()})
+        except:
+            print('can not synthesize from online server')
+            continue
+
+        try:
+            with open(save_path, mode='bw') as f:
+                f.write(r.content)
+        except:
+            print(f'can not write file {save_path}')
+
+
+    return eval_dir
 
 def run_synthesis(args, checkpoint_path, output_dir, hparams):
     GTA = (args.GTA == 'True')
@@ -350,7 +441,8 @@ def tacotron_synthesize(args, hparams, checkpoint, sentences=None):
         print(f'save output in output_{os.path.basename(os.path.abspath(args.checkpoint))}')
     elif args.mode == 'record':
         output_dir = os.path.join(output_dir, 'output_record')
-
+    elif args.mode == 'record_online':
+        output_dir = os.path.join(output_dir, 'output_record_online')
     else:
         output_dir = os.path.join(output_dir, 'output_'+args.name)
 
@@ -379,5 +471,7 @@ def tacotron_synthesize(args, hparams, checkpoint, sentences=None):
         return run_synthesis(args, checkpoint_path, output_dir, hparams)
     elif args.mode == 'record':
         return run_eval_record(args, checkpoint_path, output_dir, hparams)
+    elif args.mode == 'record_online':
+        return run_eval_record_online(args, checkpoint_path, output_dir, hparams)
     else:
         run_live(args, checkpoint_path, hparams)
