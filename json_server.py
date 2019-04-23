@@ -13,7 +13,7 @@ from hparams_ysh import hparams_ysh, update_hp1_with_hp2
 from tacotron.synthesizer_ysh import Synthesizer
 from tacotron.synthesizer_ysh_split_init_load import Synthesizer_Split
 from datasets.audio import load_wav, save_wav
-from tacotron.utils.text import line_split
+from tacotron.utils.text import line_split, line_split_at
 
 import uuid
 
@@ -72,11 +72,14 @@ def synthesize_no_split():
 @app.route('/synthesize', methods=['GET', 'POST'])
 def synthesize():
     print('\nsynthesize split...')
-    text = request.values.get('text')
-    # text.replace(',', ':')
-    # wav_name = text.split(' ')[0]
+    text = request.values.get('text').strip()
+    assert type(text) == str
+    assert text != ''
+
+    delete_uuid_part = True
+
     wav_name = f'tmp-{str(uuid.uuid1())}'
-    text_split = line_split(text)
+    text_split = line_split_at(text)
 
     output_dir = os.path.join('tacotron_output', 'output_tmp')
     eval_dir = os.path.join(output_dir, 'eval')
@@ -104,7 +107,8 @@ def synthesize():
             char_ratio = wav_duration / len(part_text)
             word_ratio = wav_duration / len(part_text.split(' '))
             print(f'         [char:{char_ratio:.4f}] [word:{word_ratio:.4f}]', wav_path)
-            if char_ratio < 0.1 and word_ratio < 0.8:
+            # except only one word dont need to repeat
+            if (char_ratio < 0.1 and word_ratio < 0.8) or (len(part_text.split(' '))==2):
                 break
         wav_path_list.append(wav_path)
 
@@ -150,6 +154,12 @@ def synthesize():
     else:
         raise RuntimeError('why wav_parts have no items')
 
+    if delete_uuid_part:
+        for wav_path in wav_path_list:
+            try:
+                os.system(f'rm {wav_path}')
+            except:
+                pass
 
     # return send_file(io.BytesIO(data), mimetype='audio/wav')
     return send_file(whole_path, mimetype='audio/mp3')
@@ -157,14 +167,20 @@ def synthesize():
 
 @app.route('/retrieve', methods=['GET', 'POST'])
 def retrieve():
-    text = request.values.get('text')
+    text = request.values.get('text').strip()
+    assert type(text) == str
+    assert text != ''
+    surfix = 'mp3'
 
+    fullname  = f'{text}.{surfix}'
+    # dirpath = '/raid1/mo/tony_robbins/video_root/speech_0422'
+    dirpath = '/raid1/stephen/rayhane-tc2/Tacotron-2/record_wav'
 
-    if not os.path.exists(text):
+    if not os.path.exists(os.path.join(dirpath, fullname)):
         return "Can not find file, please check the input path"
     else:
     # return send_file(io.BytesIO(data), mimetype='audio/wav')
-        return send_file(text, mimetype='audio/mp3')
+        return send_file(os.path.join(dirpath, fullname), mimetype='audio/mp3')
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

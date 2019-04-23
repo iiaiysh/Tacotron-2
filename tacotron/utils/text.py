@@ -76,7 +76,7 @@ def line_split(text):
     assert text.strip() != ''
 
     # principle 1
-    split_marks = '.!?'
+    split_marks = '.!?;'
     text_list = re.findall(f'([^{split_marks}]+|[{split_marks}])', text)
     if text_list[0] in split_marks:
       text_list = text_list[1:]
@@ -141,7 +141,15 @@ def line_split(text):
     assert len(text_split_final_final) > 0
     return text_split_final_final
 
+def line_split_at(text):
+    assert type(text) == str
+    assert text.strip() != ''
+    text_list = []
+    for item in text.split('@'):
+        text_list.extend(line_split(item))
 
+    assert len(text_list) > 0
+    return text_list
 def text_to_sequence(text, cleaner_names):
   '''Converts a string of text to a sequence of IDs corresponding to the symbols in the text.
 

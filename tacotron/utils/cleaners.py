@@ -41,10 +41,15 @@ _abbreviations = [(re.compile('\\b%s\\.' % x[0], re.IGNORECASE), x[1]) for x in 
   ('ft', 'fort'),
 ]]
 
+_yshmarks_0 = [(re.compile('%s' % x[0],), x[1]) for x in [
+  ('\_', ' '),
+  ('\%', ' percent'),
+
+]]
 # List of (regular expression, replacement) pairs for abbreviations:
 _yshmarks_1 = [(re.compile('\\b%s\\b' % x[0], re.IGNORECASE), x[1]) for x in [
   ('IBM', 'II BE eMm'),
-  ('OK', 'okey'),
+  ('OK', 'ookeeyy'),
   ('idea', 'idearr'),
   ('cool', 'cruel'),
   ('truth', 'truthh'),
@@ -52,7 +57,22 @@ _yshmarks_1 = [(re.compile('\\b%s\\b' % x[0], re.IGNORECASE), x[1]) for x in [
   ('error', 'eyeroow'),
   ('Neha', 'Nee haa'),
   ('childhood', 'chaild huodd'),
-  ('today', 'todayy'),
+  ('today', 'te day'),
+  ('survive', 'sur vi v'),
+  ('priority', 'priioority'),
+  ('Microsoft', 'my cro sof tt'),
+  ('wiki', 'weekee'),
+  ('steve', 'steeve'),
+  ('stephen', 'steephen'),
+  ('bill', 'bee ill'),
+  ('tomorrow', 'to mo row'),
+  ('abu dhabi', 'aa bbu dahbi'),
+  ('good', 'gooud'),
+  ('dubai', 'du bye'),
+  ('overestimate', 'oover estimate'),
+  ('yes', 'yehhs'),
+  ('friend', 'friendt'),
+  ('no', 'nooo'),
 
 ]]
 
@@ -60,10 +80,18 @@ _yshmarks_2 = [(re.compile('\\b%s\\b' % x[0],), x[1]) for x in [
   ('AM', 'ay em'),
   ('PM', 'pee eMm'),
   ('MSDOS', 'eMm eS DaoS'),
+  ('TV', 'tee vee'),
+  ('Siri', 'seerei'),
+  ('am', 'aam'),
+  ('Muhammad', 'moohhamodd'),
+
+
 
 ]]
 
 def expand_yshmarks(text):
+  for regex, replacement in _yshmarks_0:
+    text = re.sub(regex, replacement, text)
   for regex, replacement in _yshmarks_1:
     text = re.sub(regex, replacement, text)
   for regex, replacement in _yshmarks_2:
