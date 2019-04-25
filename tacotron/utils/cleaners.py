@@ -73,6 +73,7 @@ _yshmarks_1 = [(re.compile('\\b%s\\b' % x[0], re.IGNORECASE), x[1]) for x in [
   ('yes', 'yehhs'),
   ('friend', 'friendt'),
   ('no', 'nooo'),
+  ('forgive', 'for give'),
 
 ]]
 
