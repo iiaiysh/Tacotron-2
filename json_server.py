@@ -17,6 +17,8 @@ from tacotron.utils.text import line_split, line_split_at
 
 import uuid
 
+import time
+
 def precess2syninput(text):
     replace_marks = ',:-;.?!'
     for mark in replace_marks:
@@ -39,7 +41,10 @@ def demo():
 
 @app.route('/synthesize_no_split', methods=['GET', 'POST'])
 def synthesize_no_split():
-    print('synthesize...')
+    print('\n')
+
+    t1 = time.time()
+
     text = request.values.get('text')
     # text.replace(',', ':')
     # wav_name = text.split(' ')[0]
@@ -66,12 +71,17 @@ def synthesize_no_split():
 
     mel_filenames, speaker_ids = synthesizer.synthesize(texts, [f'{wav_name}'], eval_dir, log_dir, ['/raid1/stephen/rayhane-tc2/Tacotron-2/training_data/blizzard_training_data_maxmel_1700_clip_norescale/mels/mel-TheManThatCorruptedHadleyburg_chp37_00020.npy'], return_wav=True, wav_format='mp3')
     # return send_file(io.BytesIO(data), mimetype='audio/wav')
+
+    print('synthesize time...{}', time.time()-t1)
+
     return send_file(os.path.join(log_dir, f'wavs/wav-{wav_name}-linear.mp3'), mimetype='audio/mp3')
 
 
 @app.route('/synthesize', methods=['GET', 'POST'])
 def synthesize():
-    print('\nsynthesize split...')
+    print('\n')
+    t1 = time.time()
+
     text = request.values.get('text').strip()
     assert type(text) == str
     assert text != ''
@@ -162,11 +172,17 @@ def synthesize():
                 pass
 
     # return send_file(io.BytesIO(data), mimetype='audio/wav')
+    print('synthesize split time...{}', time.time()-t1)
+
     return send_file(whole_path, mimetype='audio/mp3')
 
 
 @app.route('/retrieve', methods=['GET', 'POST'])
 def retrieve():
+    print('\n')
+
+    t1 = time.time()
+
     text = request.values.get('text').strip()
     assert type(text) == str
     assert text != ''
@@ -175,6 +191,8 @@ def retrieve():
     fullname  = f'{text}.{surfix}'
     # dirpath = '/raid1/mo/tony_robbins/video_root/speech_0422'
     dirpath = '/raid1/stephen/rayhane-tc2/Tacotron-2/record_wav'
+
+    print('retrieve time...{}', time.time()-t1)
 
     if not os.path.exists(os.path.join(dirpath, fullname)):
         return "Can not find file, please check the input path"

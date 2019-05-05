@@ -74,6 +74,8 @@ _yshmarks_1 = [(re.compile('\\b%s\\b' % x[0], re.IGNORECASE), x[1]) for x in [
   ('friend', 'friendt'),
   ('no', 'nooo'),
   ('forgive', 'for give'),
+  ('ninth', 'nines'),
+  ('islamic', 'iss lamic'),
 
 ]]
 
@@ -85,8 +87,6 @@ _yshmarks_2 = [(re.compile('\\b%s\\b' % x[0],), x[1]) for x in [
   ('Siri', 'seerei'),
   ('am', 'aam'),
   ('Muhammad', 'moohhamodd'),
-
-
 
 ]]
 
